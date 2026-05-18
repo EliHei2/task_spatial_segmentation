@@ -101,7 +101,7 @@ transcripts = sp_data.points["transcripts"]
 clean_transcript_cols = [c for c in transcripts.columns if c not in _GROUND_TRUTH_COLS]
 clean_transcripts = transcripts[clean_transcript_cols]
 if "cell_id" in transcripts.columns:
-    clean_transcripts = clean_transcripts.assign(Cell_id=transcripts["cell_id"])
+    clean_transcripts = clean_transcripts.assign(cell_id=transcripts["cell_id"])
 
 # Build var from unique feature names in transcripts, mapping to feature_ids from metadata
 feature_names = transcripts["feature_name"].compute().unique().tolist()
