@@ -31,10 +31,12 @@ arguments:
     choices: [auto, cellpose, transcript_cell_id]
     description: |
       Source of the initial boundary node set that segger trains against.
-      'auto' uses the transcripts' `cell_id` column when it is present in the input
-      and falls back to running Cellpose on `morphology_mip` otherwise.
-      'cellpose' always runs Cellpose. 'transcript_cell_id' requires a `cell_id`
-      column on the transcripts and builds one convex-hull polygon per cell id.
+      'auto' uses the transcripts' `Cell_id` prior column when it is present
+      (falls back to `cell_id` for legacy inputs) and runs Cellpose on
+      `morphology_mip` otherwise.
+      'cellpose' always runs Cellpose. 'transcript_cell_id' requires a
+      `Cell_id` (or `cell_id`) column on the transcripts and builds one
+      convex-hull polygon per cell id.
     info:
       test_default: auto
   - name: --n_epochs

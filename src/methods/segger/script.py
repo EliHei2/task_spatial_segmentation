@@ -57,13 +57,13 @@ def _apply_affine(M: np.ndarray, xy: np.ndarray) -> np.ndarray:
     return (homog @ M.T)[:, :2]
 
 
-def _polygons_from_cell_ids(tx_pd: pd.DataFrame) -> gpd.GeoDataFrame:
-    """Convex hull per `cell_id` value, in global coordinates."""
-    if "cell_id" not in tx_pd.columns:
-        raise ValueError("transcripts table has no `cell_id` column")
+def _polygons_from_cell_ids(tx_pd: pd.DataFrame, col: str = "Cell_id") -> gpd.GeoDataFrame:
+    """Convex hull per prior cell id value, in global coordinates."""
+    if col not in tx_pd.columns:
+        raise ValueError(f"transcripts table has no `{col}` column")
     records = []
-    valid = tx_pd[tx_pd["cell_id"].notna() & (tx_pd["cell_id"].astype(str) != "")]
-    for cid, group in valid.groupby("cell_id"):
+    valid = tx_pd[tx_pd[col].notna() & (tx_pd[col].astype(str) != "")]
+    for cid, group in valid.groupby(col):
         if len(group) < 3:
             continue
         pts = group[["x", "y"]].to_numpy()
@@ -217,15 +217,26 @@ image_transform = image_el.transform.copy()
 tx_pd = sdata.points["transcripts"].compute().reset_index(drop=True)
 
 # --- Step 1: produce initial boundaries ---
+# Prefer the `Cell_id` prior column (new contract from process_dataset). Fall
+# back to lowercase `cell_id` for backward compatibility with older inputs.
+prior_col = next(
+    (c for c in ("Cell_id", "cell_id") if c in tx_pd.columns and tx_pd[c].notna().any()),
+    None,
+)
 mode = par["init_segmentation"]
 if mode == "auto":
-    mode = "transcript_cell_id" if "cell_id" in tx_pd.columns and tx_pd["cell_id"].notna().any() else "cellpose"
-print(f"Init segmentation mode: {mode}", flush=True)
+    mode = "transcript_cell_id" if prior_col is not None else "cellpose"
+print(f"Init segmentation mode: {mode} (prior column: {prior_col})", flush=True)
 
 initial_labels: np.ndarray
 shapes_gdf: gpd.GeoDataFrame
 if mode == "transcript_cell_id":
-    shapes_gdf = _polygons_from_cell_ids(tx_pd)
+    if prior_col is None:
+        raise ValueError(
+            "init_segmentation='transcript_cell_id' requested but neither "
+            "`Cell_id` nor `cell_id` is present in transcripts."
+        )
+    shapes_gdf = _polygons_from_cell_ids(tx_pd, col=prior_col)
     initial_labels = _rasterize_polygons(shapes_gdf, image_el, label_col="cell_id")
 elif mode == "cellpose":
     initial_labels, shapes_gdf = _polygons_from_cellpose(image_el, par["cellpose_diameter"])
