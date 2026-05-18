@@ -10,3 +10,8 @@ trace-*
 .ipynb_checkpoints
 /temp
 /.vscode
+
+# Claude Code
+CLAUDE.md
+.claude/
+.claude.json
