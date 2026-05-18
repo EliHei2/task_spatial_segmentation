@@ -30,6 +30,10 @@ scripts/run_benchmark/run_test_local.sh
 # Run full local benchmark
 scripts/run_benchmark/run_full_local.sh
 
+# Run the benchmark on Seqera Cloud (test / full)
+scripts/run_benchmark/run_test_seqeracloud.sh
+scripts/run_benchmark/run_full_seqeracloud.sh
+
 # Create a new method or metric from template
 common/scripts/create_component
 
@@ -46,15 +50,23 @@ nextflow run target/nextflow/<name> -profile docker --id <id> --input <input> --
 
 ## Architecture
 
-The task follows a fixed pipeline defined by the API specs in `src/api/`:
+The task follows a fixed pipeline defined by the API specs in `src/api/` and split across two Nextflow workflows in `src/workflows/`:
 
 ```
-Raw spatial data
-    → [data_processor] process_dataset    → unlabelled + solution files
-    → [method / control_method]           → prediction file
-    → [data_processor] process_prediction → formatted prediction
-    → [metric] ari                        → score file
+process_datasets workflow (src/workflows/process_datasets/main.nf):
+  Raw spatial data
+    → [data_processor] process_dataset
+       → spatial_unlabelled + spatial_solution + scrnaseq_reference
+
+run_benchmark workflow (src/workflows/run_benchmark/main.nf):
+  spatial_unlabelled
+    → [method | control_method]                    → prediction
+    → [data_processor] process_prediction          → processed_prediction
+    → [data_processor] cell_type_annotation_tacco  → annotated prediction
+    → [metric] ari   (compared vs spatial_solution) → score
 ```
+
+The repo-level `main.nf` and `nextflow.config` wire these together; per-component resource labels (`lowmem`/`midmem`/…) come from `_viash.yaml` `config_mods`.
 
 **Component types** (each defined in `src/api/comp_*.yaml`):
 - `control_method` — baseline segmentations (random Voronoi, true labels, empty labels)
@@ -76,6 +88,10 @@ src/<type>/<name>/
 
 Test resources and default parameters for `viash test` are declared inside `config.vsh.yaml` under `info.test_resources` and `info.test_default`.
 
+## API Inheritance
+
+Every `config.vsh.yaml` starts with `__merge__: ../../api/comp_<type>.yaml`, which pulls in the canonical argument list and file-format references for that component type. To change the contract for *all* methods/metrics/etc., edit the shared `src/api/comp_*.yaml` and `src/api/file_*.yaml` rather than the individual configs. The file schemas in `src/api/file_*.yaml` are what `common/component_tests/run_and_check_output.py` validates against.
+
 ## Data Formats
 
 - **Spatial data**: Zarr-based `SpatialData` objects (`.zarr/`)
@@ -89,6 +105,7 @@ Test resources and default parameters for `viash test` are declared inside `conf
 - `README.md` is **auto-generated** from the YAML API specs; do not edit it directly.
 - All components run inside Docker containers by default. Use `--platform docker` / `--engine docker` flags with Viash when needed.
 - `_viash.yaml` is the project-level Viash config (project name, organization, package registry, test resource S3 paths).
+- CI (`.github/workflows/{test,build}.yaml`) delegates to `viash-io/viash-actions@v6` — local `viash ns build` / `viash ns test` mirror what CI runs.
 - Don't commit to main, always create a new branch
-- Fill in the summary for a src/methods/<component>/config.vsh.yaml. Write a one sentence summary and a one paragraph summary of how this method works based on documentation and references.
+- When adding a new component, fill in `info.summary` (one sentence) and `info.description` (one paragraph) in its `config.vsh.yaml` — they feed the auto-generated README. The Cellpose config (`src/methods/cellpose/config.vsh.yaml`) is the reference for tone/length.
 - always use viash test to test new components
